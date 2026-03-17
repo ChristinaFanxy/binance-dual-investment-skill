@@ -237,31 +237,35 @@ def format_output(results: list, mode: str, spot_prices: dict, dvol: dict) -> st
     spot = spot_prices.get(coin, "N/A")
     coin_dvol = dvol.get(coin, "N/A")
     mode_name = "低买" if mode == "PUT" else "高卖"
+    delta_limit = get_delta_limit(coin_dvol)
 
     lines.append(f"{coin} ${spot:,.0f} | DVOL {coin_dvol:.1f}% | 模式: {mode_name}")
     lines.append("")
 
-    # 推荐
-    top = results[0]
-    lines.append("━━ 推荐 ━━")
-    lines.append(
-        f"{mode_name} ${top['strikePrice']:,.0f} | {top['duration']}天 | "
-        f"APR {top['apr']*100:.1f}% | Delta {top['delta']:.3f} ({top['abs_delta']*100:.0f}%) | "
-        f"得分 {top['score']:.2f}"
-    )
+    # 筛选条件说明
+    lines.append("━━ 筛选条件 ━━")
+    lines.append(f"  期限: 1-5 天")
+    lines.append(f"  APR: ≥ 3%")
+    lines.append(f"  Delta: 0.05 ~ {delta_limit:.2f} (根据 DVOL {coin_dvol:.0f}% 动态调整)")
+    lines.append("")
 
-    # 备选
-    if len(results) > 1:
-        lines.append("")
-        lines.append("━━ 备选 ━━")
-        alt = results[1]
+    # 评分公式说明
+    lines.append("━━ 评分公式 ━━")
+    lines.append("  Score = APR / |Delta|")
+    lines.append("  APR 越高、Delta 越低 → 得分越高")
+    lines.append("")
+
+    # Top 3 排名
+    lines.append("━━ 排名 ━━")
+    for i, rec in enumerate(results[:3], 1):
+        medal = {1: "🥇", 2: "🥈", 3: "🥉"}[i]
         lines.append(
-            f"${alt['strikePrice']:,.0f} | APR {alt['apr']*100:.1f}% | "
-            f"Delta {alt['delta']:.3f} | 得分 {alt['score']:.2f}"
+            f"  {medal} 第{i}名: {mode_name} ${rec['strikePrice']:,.0f} | {rec['duration']}天 | "
+            f"APR {rec['apr']:.1f}% | Δ {rec['delta']:.3f} | 得分 {rec['score']:.1f}"
         )
 
     lines.append("")
-    lines.append("被行权: 低买→接BTC切高卖 | 高卖→换U切低买")
+    lines.append("被行权: 低买→接币切高卖 | 高卖→换U切低买")
     lines.append("DYOR。")
 
     return "\n".join(lines)
@@ -348,6 +352,22 @@ def format_multi_coin_output(
     lines.append(f"📊 双币投资推荐 — {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     lines.append("")
 
+    # 筛选条件说明（只显示一次）
+    lines.append("━━ 筛选条件 ━━")
+    lines.append("  期限: 1-5 天")
+    lines.append("  APR: ≥ 3%")
+    lines.append("  Delta: 0.05 ~ 动态上限 (根据 DVOL 调整)")
+    lines.append("    DVOL > 70% → Delta ≤ 0.15")
+    lines.append("    DVOL 40-70% → Delta ≤ 0.30")
+    lines.append("    DVOL < 40% → Delta ≤ 0.35")
+    lines.append("")
+
+    # 评分公式说明
+    lines.append("━━ 评分公式 ━━")
+    lines.append("  Score = APR / |Delta|")
+    lines.append("  APR 越高、Delta 越低 → 得分越高")
+    lines.append("")
+
     for coin, data in recommendations.items():
         mode = data["mode"]
         amount = data["amount"]
@@ -370,24 +390,19 @@ def format_multi_coin_output(
             lines.append("")
             continue
 
-        # 推荐
-        top = recs[0]
-        target_coin = top["exercisedCoin"]
+        # 市场信息
+        target_coin = recs[0]["exercisedCoin"]
         spot = spot_prices.get(target_coin, 0)
         coin_dvol = dvol.get(target_coin, 0)
-
         lines.append(f"  {target_coin} ${spot:,.0f} | DVOL {coin_dvol:.1f}%")
-        lines.append(
-            f"  推荐: {mode_name} ${top['strikePrice']:,.0f} | {top['duration']}天 | "
-            f"APR {top['apr']:.1f}% | Δ {top['delta']:.3f} | 得分 {top['score']:.1f}"
-        )
+        lines.append("")
 
-        # 备选
-        if len(recs) > 1:
-            alt = recs[1]
+        # Top 3 排名
+        for i, rec in enumerate(recs[:3], 1):
+            medal = {1: "🥇", 2: "🥈", 3: "🥉"}[i]
             lines.append(
-                f"  备选: ${alt['strikePrice']:,.0f} | {alt['duration']}天 | "
-                f"APR {alt['apr']:.1f}% | Δ {alt['delta']:.3f}"
+                f"  {medal} 第{i}名: {mode_name} ${rec['strikePrice']:,.0f} | {rec['duration']}天 | "
+                f"APR {rec['apr']:.1f}% | Δ {rec['delta']:.3f} | 得分 {rec['score']:.1f}"
             )
 
         lines.append("")
