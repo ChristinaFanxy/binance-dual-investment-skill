@@ -381,6 +381,8 @@ openclaw cron list
 openclaw cron remove --name "DCI结算检查-abc12345"
 ```
 
+注意：所有时间均使用 UTC 时区。`--at` 参数使用 ISO 8601 UTC 格式（以 `Z` 结尾）。
+
 ---
 
 ## 文件结构

@@ -296,8 +296,8 @@ if __name__ == "__main__":
         else:
             print(f"活跃申购 ({len(active)}):")
             for s in active:
-                settle_dt = datetime.fromtimestamp(s['settle_date']/1000)
-                print(f"  {s['option_type']} {s['exercised_coin']} @ ${s['strike_price']:,.0f} | 到期: {settle_dt.strftime('%m-%d %H:%M')}")
+                settle_dt = datetime.fromtimestamp(s['settle_date']/1000, tz=timezone.utc)
+                print(f"  {s['option_type']} {s['exercised_coin']} @ ${s['strike_price']:,.0f} | 到期: {settle_dt.strftime('%m-%d %H:%M')} UTC")
 
     elif args.pending:
         pending = get_pending_settlements()

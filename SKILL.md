@@ -73,6 +73,8 @@ python3 scripts/calc_score.py --funds "1000 USDT + 0.5 ETH"
 **OpenClaw 用户**：直接运行输出的命令，到期后自动检查结算
 **其他 Agent**：到期后手动运行 `python3 scripts/positions.py --check`
 
+注意：所有时间均使用 UTC 时区。cron 命令的 `--at` 参数为 ISO 8601 UTC 格式。
+
 ---
 
 ## Phase 3: 行权检查与复投

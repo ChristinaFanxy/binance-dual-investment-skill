@@ -69,10 +69,20 @@ DYOR。
 产品: {低买/高卖} ${strike} | {d}天
 金额: ${amount}
 预期收益: ${保费} (APR {apr}%)
-到期日: {日期}
+到期日: {YYYY-MM-DD HH:MM} UTC
 
-到期后可运行 positions.py --check 检查结算
+━━ 自动结算检查（OpenClaw）━━
+到期后 1 小时将自动检查结算，运行以下命令启用：
+
+openclaw cron add \
+  --name "DCI结算检查-{record_id}" \
+  --at "{ISO8601_UTC时间}" \
+  --session isolated \
+  --message "运行结算检查: python3 /path/to/positions.py --check --json --with-recommendations" \
+  --announce
 ```
+
+注意：所有时间均使用 UTC 时区，OpenClaw cron 的 `--at` 参数使用 ISO 8601 格式（如 `2024-03-20T09:00:00Z`）。
 
 ---
 
