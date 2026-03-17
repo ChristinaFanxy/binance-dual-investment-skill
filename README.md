@@ -12,47 +12,101 @@ BTC/ETH 双币投资车轮策略工具，基于 Deribit Delta 定价 + 币安真
 
 ## 安装
 
-1. 复制到 Claude Code skills 目录：
+Clone 到任意目录：
 ```bash
-cp -r dual-investment ~/.claude/skills/
-```
+git clone https://github.com/ChristinaFanxy/binance-dual-investment-skill.git
+cd binance-dual-investment-skill
 
-2. 配置 API Key：
-```bash
-cd ~/.claude/skills/dual-investment
+# 配置 API Key
 cp config.example.json config.json
 # 编辑 config.json 填入你的币安 API Key
+
+# 创建数据目录
+mkdir -p data
 ```
 
-3. 确保 data 目录存在：
+## 命令行使用
+
+所有脚本支持独立运行，不依赖任何 agent 框架：
+
 ```bash
-mkdir -p ~/.claude/skills/dual-investment/data
+# 检查 API 配置
+python3 scripts/binance_api.py --check
+
+# 扫描账户余额
+python3 scripts/account.py --scan
+
+# 获取市场数据
+python3 scripts/fetch_data.py
+
+# 获取推荐（单币种）
+python3 scripts/calc_score.py --mode PUT --coin BTC
+
+# 获取推荐（多币种）
+python3 scripts/calc_score.py --funds "1000 USDT + 0.5 ETH"
+
+# 查看持仓
+python3 scripts/positions.py --list
+
+# 检查结算（JSON 输出）
+python3 scripts/positions.py --check --json
 ```
 
-## 使用
+## Agent 集成
 
-在 Claude Code 中说：
-- "双币" - 触发完整流程
-- "低买" / "高卖" - 指定模式
-- "推荐" - 获取当前推荐
-- "Delta" - 查看 Delta 分析
+### Claude Code
 
-## OpenClaw 集成
-
-定时结算检查：
+复制到 skills 目录：
 ```bash
-python3 ~/.claude/skills/dual-investment/scripts/positions.py --check --json
+cp -r binance-dual-investment-skill ~/.claude/skills/dual-investment
 ```
 
-输出 JSON 格式供解析，包含：
-- `settlements` - 结算结果
-- `next_recommendations` - 下轮推荐
+触发词：`双币`、`低买`、`高卖`、`推荐`、`Delta`
+
+### OpenClaw / Codex / 其他 Agent
+
+直接调用 Python 脚本，解析 JSON 输出：
+
+```bash
+# 获取推荐（JSON）
+python3 /path/to/scripts/calc_score.py --funds "1000 USDT" --json
+
+# 检查结算 + 下轮推荐（JSON）
+python3 /path/to/scripts/positions.py --check --json --with-recommendations
+```
+
+JSON 输出结构：
+```json
+{
+  "settlements": [{
+    "id": "uuid",
+    "exercised": true,
+    "profit": {"premium_earned": 5.48, "pnl": -12.50},
+    "wheel_suggestion": {"next_mode": "CALL"}
+  }],
+  "next_recommendations": [{
+    "mode": "CALL",
+    "coin": "BTC",
+    "strike": 82000,
+    "apr": 15.5,
+    "score": 155.0
+  }]
+}
+```
+
+### 定时任务
+
+```bash
+# crontab -e
+# 每天 9:00 检查结算
+0 9 * * * python3 /path/to/scripts/positions.py --check --json >> /var/log/dci.log
+```
 
 ## 文件结构
 
 ```
-dual-investment/
-├── SKILL.md              # Skill 定义
+binance-dual-investment-skill/
+├── SKILL.md              # Claude Code Skill 定义
 ├── config.example.json   # 配置模板
 ├── scripts/
 │   ├── binance_api.py    # API 封装
