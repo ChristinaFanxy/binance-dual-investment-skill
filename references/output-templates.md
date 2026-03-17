@@ -5,27 +5,42 @@
 ```
 📊 双币投资推荐 — {日期}
 
-{COIN} ${SPOT} | DVOL {dvol}% | 模式: {低买/高卖}
-策略资金: {金额}
-{高卖时}: 成本线 ${COST_BASIS} | 行权获得 {数量} BTC
+━━ 筛选条件 ━━
+  期限: 1-5 天
+  APR: ≥ 3%
+  Delta: 0.05 ~ 动态上限 (根据 DVOL 调整)
+    DVOL > 70% → Delta ≤ 0.15
+    DVOL 40-70% → Delta ≤ 0.30
+    DVOL < 40% → Delta ≤ 0.35
+
+━━ 评分公式 ━━
+  Score = APR / |Delta|
+  APR 越高、Delta 越低 → 得分越高
+
+━━ {金额} {COIN} → {低买/高卖} ━━
+  {COIN} ${SPOT} | DVOL {dvol}%
+
+  🥇 第1名: {低买/高卖} ${strike1} | {d1}天 | APR {apr1}% | Δ {delta1} | 得分 {score1}
+  🥈 第2名: {低买/高卖} ${strike2} | {d2}天 | APR {apr2}% | Δ {delta2} | 得分 {score2}
+  🥉 第3名: {低买/高卖} ${strike3} | {d3}天 | APR {apr3}% | Δ {delta3} | 得分 {score3}
+
+被行权: 低买→接币切高卖 | 高卖→换U切低买
+DYOR。
+```
+
+---
+
+## 高卖模式附加信息
+
+```
+{高卖时}:
+  成本线 ${COST_BASIS} | 行权获得 {数量} USDT
 
 {DRAWDOWN_ALERT 时}:
 🚨 现价较成本跌超 {%}！高卖停滞。评估: 止损换U 或 持币等反弹。
-(说"修改预警线至X%"可调整)
 
 {NO_CALL_PRODUCT 时}:
 ⚠️ 暂无保本高卖产品，建议持币。
-
-━━ 推荐 ━━
-{低买/高卖} ${strike} | {d}天 | APR {apr}% | Delta {delta} ({|d|×100}%) | 得分 {SCORE}
-
-━━ 备选 ━━
-${strike2} | APR {apr2}% | Delta {delta2} | 得分 {SCORE2}
-
-被行权: 低买→接BTC切高卖 | 高卖→换U切低买
-
-DYOR。
-金额 + CONFIRM 申购。
 ```
 
 ---
@@ -56,5 +71,28 @@ DYOR。
 预期收益: ${保费} (APR {apr}%)
 到期日: {日期}
 
-到期后推送下一期推荐
+到期后可运行 positions.py --check 检查结算
+```
+
+---
+
+## JSON 输出格式（供 Agent 解析）
+
+```json
+{
+  "USDT": {
+    "mode": "PUT",
+    "amount": 1000.0,
+    "recommendations": [
+      {
+        "strikePrice": 80000,
+        "duration": 3,
+        "apr": 35.5,
+        "delta": -0.08,
+        "score": 443.75,
+        "exercisedCoin": "BTC"
+      }
+    ]
+  }
+}
 ```
