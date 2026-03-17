@@ -14,6 +14,7 @@ from binance_api import subscribe_dci, check_api_config
 
 SKILL_DIR = Path(__file__).parent.parent
 SUBSCRIPTIONS_FILE = SKILL_DIR / "data" / "subscriptions.json"
+POSITIONS_SCRIPT = SKILL_DIR / "scripts" / "positions.py"
 
 
 def load_subscriptions() -> dict:
@@ -185,12 +186,18 @@ def format_subscription_preview(product: dict, invest_amount: float, invest_coin
 def format_subscription_result(record: dict) -> str:
     """格式化申购结果"""
     if record["status"] == "active":
+        settle_dt = datetime.fromtimestamp(record['settle_date']/1000, tz=timezone.utc)
         lines = [
             "✅ 申购成功",
             f"记录 ID: {record['id'][:8]}...",
             f"产品: {record['option_type']} {record['exercised_coin']} @ ${record['strike_price']:,.0f}",
             f"金额: {record['invest_amount']} {record['invest_coin']}",
-            f"到期: {datetime.fromtimestamp(record['settle_date']/1000).strftime('%Y-%m-%d %H:%M')}"
+            f"到期: {settle_dt.strftime('%Y-%m-%d %H:%M')} UTC",
+            "",
+            "━━ 自动结算检查（OpenClaw）━━",
+            "到期后 1 小时将自动检查结算，运行以下命令启用：",
+            "",
+            generate_settlement_check_command(record)
         ]
     else:
         lines = [
@@ -218,6 +225,34 @@ def get_pending_settlements() -> list:
             pending.append(s)
 
     return pending
+
+
+def generate_settlement_check_command(record: dict) -> str:
+    """
+    生成结算检查的 OpenClaw cron 命令
+    到期时间 + 1 小时后执行检查
+
+    Args:
+        record: 申购记录
+
+    Returns:
+        OpenClaw cron 命令字符串
+    """
+    settle_ms = record["settle_date"]
+    check_time_ms = settle_ms + 3600 * 1000  # +1 小时
+    check_time = datetime.fromtimestamp(check_time_ms / 1000, tz=timezone.utc)
+    check_time_iso = check_time.isoformat().replace("+00:00", "Z")
+
+    record_id_short = record["id"][:8]
+
+    cmd = f'''openclaw cron add \\
+  --name "DCI结算检查-{record_id_short}" \\
+  --at "{check_time_iso}" \\
+  --session isolated \\
+  --message "运行结算检查: python3 {POSITIONS_SCRIPT} --check --json --with-recommendations" \\
+  --announce'''
+
+    return cmd
 
 
 def update_subscription_status(record_id: str, status: str, result: Optional[str] = None):

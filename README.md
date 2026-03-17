@@ -331,7 +331,17 @@ python3 scripts/positions.py --check        # 5. 检查结算
 - `低买` / `高卖` - 指定模式
 - `推荐` - 获取当前推荐
 
-### OpenClaw / Codex / 其他 Agent
+### OpenClaw 集成
+
+安装到 `~/.openclaw/skills` 目录：
+
+```bash
+git clone https://github.com/ChristinaFanxy/binance-dual-investment-skill.git ~/.openclaw/skills/dual-investment
+```
+
+使用触发词与 Claude Code 相同：`双币`、`低买`、`高卖`、`推荐`
+
+### 其他 Agent（Codex 等）
 
 调用脚本并解析 JSON 输出：
 
@@ -349,6 +359,26 @@ python3 scripts/positions.py --check --json --with-recommendations
 # crontab -e
 # 每天 9:00 检查结算
 0 9 * * * cd /path/to/skill && python3 scripts/positions.py --check --json >> /var/log/dci.log
+```
+
+### OpenClaw 自动结算检查
+
+申购成功后，脚本会自动输出 OpenClaw cron 命令。运行该命令可在到期后 1 小时自动检查结算：
+
+```bash
+# 申购成功后输出示例：
+openclaw cron add \
+  --name "DCI结算检查-abc12345" \
+  --at "2024-03-20T09:00:00Z" \
+  --session isolated \
+  --message "运行结算检查: python3 /path/to/positions.py --check --json --with-recommendations" \
+  --announce
+
+# 查看已设置的定时任务
+openclaw cron list
+
+# 删除定时任务
+openclaw cron remove --name "DCI结算检查-abc12345"
 ```
 
 ---

@@ -66,6 +66,15 @@ python3 scripts/calc_score.py --funds "1000 USDT + 0.5 ETH"
 
 ---
 
+## Phase 2.5: 设置结算检查（可选）
+
+申购成功后，脚本会输出 OpenClaw cron 命令。
+
+**OpenClaw 用户**：直接运行输出的命令，到期后自动检查结算
+**其他 Agent**：到期后手动运行 `python3 scripts/positions.py --check`
+
+---
+
 ## Phase 3: 行权检查与复投
 
 **检查待结算持仓**:
