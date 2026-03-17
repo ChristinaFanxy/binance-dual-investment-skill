@@ -339,6 +339,12 @@ python3 scripts/positions.py --check        # 5. 检查结算
 git clone https://github.com/ChristinaFanxy/binance-dual-investment-skill.git ~/.openclaw/skills/dual-investment
 ```
 
+更新到最新版本：
+
+```bash
+cd ~/.openclaw/skills/dual-investment && git pull
+```
+
 使用触发词与 Claude Code 相同：`双币`、`低买`、`高卖`、`推荐`
 
 ### 其他 Agent（Codex 等）
