@@ -1,0 +1,5 @@
+{
+  "api_key": "your_api_key",
+  "secret_key": "your_secret_key",
+  "max_drawdown_alert": 0.30
+}

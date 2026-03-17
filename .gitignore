@@ -1,0 +1,16 @@
+# 敏感配置（包含 API Key）
+config.json
+
+# 缓存
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# 本地数据（用户自己生成）
+data/market_data.json
+data/subscriptions.json
+
+# 备份文件
+*.bak
