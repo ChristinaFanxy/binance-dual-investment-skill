@@ -11,6 +11,7 @@ import time
 import math
 import urllib.request
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -290,8 +291,19 @@ def match_binance_to_deribit(binance_products: list, deribit_options: dict) -> l
     return list(matched)
 
 
+def fetch_single_delta(instrument: str) -> tuple[str, float | None]:
+    """获取单个合约的 Delta"""
+    url = f"https://www.deribit.com/api/v2/public/ticker?instrument_name={instrument}"
+    data = fetch_json(url)
+    if "result" in data and "greeks" in data["result"]:
+        delta = data["result"]["greeks"].get("delta")
+        if delta is not None:
+            return (instrument, round(delta, 5))
+    return (instrument, None)
+
+
 def fetch_deribit_deltas_for_products(binance_products: list) -> dict:
-    """获取匹配的 Deribit 期权 Delta"""
+    """获取匹配的 Deribit 期权 Delta（并发请求）"""
     if not binance_products:
         print("  无币安产品，跳过 Delta 获取")
         return {}
@@ -305,15 +317,18 @@ def fetch_deribit_deltas_for_products(binance_products: list) -> dict:
     matched = match_binance_to_deribit(binance_products, deribit_options)
     print(f"  匹配到 {len(matched)} 个合约")
 
-    # 3. 逐个请求 ticker 获取精确 delta
+    # 3. 并发请求 ticker 获取精确 delta
     deltas = {}
-    for instrument in matched:
-        url = f"https://www.deribit.com/api/v2/public/ticker?instrument_name={instrument}"
-        data = fetch_json(url)
-        if "result" in data and "greeks" in data["result"]:
-            delta = data["result"]["greeks"].get("delta")
+    if not matched:
+        return deltas
+
+    max_workers = min(10, len(matched))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(fetch_single_delta, inst): inst for inst in matched}
+        for future in as_completed(futures):
+            instrument, delta = future.result()
             if delta is not None:
-                deltas[instrument] = round(delta, 5)
+                deltas[instrument] = delta
 
     print(f"  成功获取 {len(deltas)} 个 Delta")
     return deltas
@@ -325,13 +340,14 @@ def main():
     # 加载配置
     api_key, secret_key = load_binance_config()
 
-    # 获取各项数据
-    print("获取现价...")
-    spot_prices = fetch_spot_prices()
+    # 并发获取现价和 DVOL
+    print("获取现价和 DVOL...")
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        spot_future = executor.submit(fetch_spot_prices)
+        dvol_future = executor.submit(fetch_dvol)
+        spot_prices = spot_future.result()
+        dvol = dvol_future.result()
     print(f"  BTC: ${spot_prices.get('BTC', 'N/A')}, ETH: ${spot_prices.get('ETH', 'N/A')}")
-
-    print("获取 DVOL...")
-    dvol = fetch_dvol()
     print(f"  BTC DVOL: {dvol.get('BTC', 'N/A')}%, ETH DVOL: {dvol.get('ETH', 'N/A')}%")
 
     print("获取币安双币投资产品...")

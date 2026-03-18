@@ -83,50 +83,63 @@ def parse_deribit_instrument(name: str) -> dict:
     }
 
 
-def match_delta(product: dict, deribit_deltas: dict, spot_prices: dict, dvol: dict) -> float | None:
-    """为币安产品匹配 Deribit Delta"""
+def build_delta_index(deribit_deltas: dict) -> dict:
+    """构建 Delta 索引，加速匹配查找
+
+    索引结构: {(currency, option_type, strike): [(expiry_ms, delta, instrument), ...]}
+    每个 key 下的列表按 expiry_ms 排序
+    """
+    index = {}
+    for instrument, delta in deribit_deltas.items():
+        parsed = parse_deribit_instrument(instrument)
+        if not parsed:
+            continue
+        key = (parsed["currency"], parsed["option_type"], parsed["strike"])
+        expiry_ms = int(parsed["expiry_date"].timestamp() * 1000)
+        if key not in index:
+            index[key] = []
+        index[key].append((expiry_ms, delta, instrument))
+
+    # 按到期时间排序
+    for key in index:
+        index[key].sort(key=lambda x: x[0])
+
+    return index
+
+
+def match_delta_indexed(
+    product: dict,
+    delta_index: dict,
+    spot_prices: dict,
+    dvol: dict
+) -> float | None:
+    """使用索引快速匹配 Delta（O(1) 查找 + O(k) 遍历）"""
     coin = product["exercisedCoin"]
     strike = product["strikePrice"]
     opt_type = product["optionType"]
     settle_ms = product["settleDate"]
     duration_days = product["duration"]
 
+    # O(1) 索引查找
+    key = (coin, opt_type, strike)
+    candidates = delta_index.get(key, [])
+
     best_match = None
     best_diff = float("inf")
 
-    for instrument, delta in deribit_deltas.items():
-        parsed = parse_deribit_instrument(instrument)
-        if not parsed:
-            continue
-
-        # 匹配币种和期权类型
-        if parsed["currency"] != coin:
-            continue
-        if parsed["option_type"] != opt_type:
-            continue
-
-        # 匹配行权价
-        if abs(parsed["strike"] - strike) > 0.01:
-            continue
-
-        # 计算到期日差异
-        expiry_ms = int(parsed["expiry_date"].timestamp() * 1000)
+    # O(k) 遍历候选（通常 k=1-3）
+    for expiry_ms, delta, instrument in candidates:
         diff_ratio = abs(expiry_ms - settle_ms) / (duration_days * 86400000)
-
-        # 相对期限熔断
         if diff_ratio > 0.5:
             continue
-
         if diff_ratio < best_diff:
             best_diff = diff_ratio
             best_match = delta
 
     # BS Delta fallback
     if best_match is None or best_match == 0.0:
-        coin = product["exercisedCoin"]
         S = spot_prices.get(coin)
         coin_dvol = dvol.get(coin)
-
         if S and coin_dvol:
             current_ms = int(time.time() * 1000)
             T = (settle_ms - current_ms) / (365.25 * 24 * 3600 * 1000)
@@ -154,7 +167,8 @@ def calculate_scores(
     spot_prices: dict,
     mode: str,
     cost_basis: float = None,
-    target_coin: str = None
+    target_coin: str = None,
+    delta_index: dict = None
 ) -> list:
     """计算产品评分
 
@@ -166,8 +180,13 @@ def calculate_scores(
         mode: PUT 或 CALL
         cost_basis: 成本价（CALL 模式用）
         target_coin: 目标标的币种（BTC/ETH），用于过滤
+        delta_index: 预计算的 Delta 索引（可选，用于加速匹配）
     """
     results = []
+
+    # 如果没有传入索引，构建一个
+    if delta_index is None:
+        delta_index = build_delta_index(deribit_deltas)
 
     for product in products:
         # 过滤条件
@@ -189,8 +208,8 @@ def calculate_scores(
             if product["strikePrice"] < cost_basis:
                 continue
 
-        # 匹配 Delta
-        delta = match_delta(product, deribit_deltas, spot_prices, dvol)
+        # 使用索引匹配 Delta
+        delta = match_delta_indexed(product, delta_index, spot_prices, dvol)
         if delta is None:
             continue
 
@@ -302,6 +321,9 @@ def get_recommendations_for_funds(
     cost_basis = cost_basis or {}
     results = {}
 
+    # 预计算 Delta 索引（只构建一次）
+    delta_index = build_delta_index(deribit_deltas)
+
     for coin, amount in funds.items():
         mode = INVEST_COIN_MODE.get(coin)
         if not mode:
@@ -314,11 +336,11 @@ def get_recommendations_for_funds(
             # 稳定币可以买 BTC 或 ETH，分别计算
             btc_recs = calculate_scores(
                 products, deribit_deltas, dvol, spot_prices,
-                mode="PUT", target_coin="BTC"
+                mode="PUT", target_coin="BTC", delta_index=delta_index
             )
             eth_recs = calculate_scores(
                 products, deribit_deltas, dvol, spot_prices,
-                mode="PUT", target_coin="ETH"
+                mode="PUT", target_coin="ETH", delta_index=delta_index
             )
             # 合并并按评分排序
             all_recs = btc_recs + eth_recs
@@ -330,7 +352,8 @@ def get_recommendations_for_funds(
                 products, deribit_deltas, dvol, spot_prices,
                 mode="CALL",
                 cost_basis=cost_basis.get(coin),
-                target_coin=coin
+                target_coin=coin,
+                delta_index=delta_index
             )[:5]
 
         results[coin] = {
